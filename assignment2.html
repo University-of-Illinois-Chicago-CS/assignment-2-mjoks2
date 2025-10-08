@@ -39,7 +39,13 @@
         <table>
             <tr>
                 <td>Y Rotation</td>
-                <td><input id="rotation" type="range" min="0" max="360" value="0">
+                <td><input id="yrotation" type="range" min="0" max="360" value="0">
+                </td>
+            </tr>
+
+            <tr>
+                <td>Z Rotation</td>
+                <td><input id="zrotation" type="range" min="0" max="360" value="0">
                 </td>
             </tr>
 
@@ -57,11 +63,36 @@
             </tr>
 
             <tr>
+                <td>Pan X</td>
+                <td><input id="panX" type="range" min="-15" max="15" step="0.1" value="0">
+                </td>
+            </tr>
+
+            <tr>
+                <td>Pan Y</td>
+                <td><input id="panY" type="range" min="-7" max="7" step="0.1" value="0">
+                </td>
+            </tr>
+
+            <tr>
+                <td>Pan Z</td>
+                <td><input id="panZ" type="range" min="-10" max="10" step="0.1" value="0">
+                </td>
+            </tr>
+
+            <tr>
                 <td>Load image</td>
                 <td><input type="file" id="fileInput" onchange="loadImageFile(event)">
                 </td>
             </tr>
 
+            <tr>
+                <td>Projection type</td>
+                <td><select id="projection" name="projection_type">
+                    <option value="perspective">Perspective</option>
+                    <option value="orthographic">Orthographic</option>
+                    </select>
+                </td>
         </table>
     </div>
 </body>

@@ -53,6 +53,64 @@ function processImage(img)
 	};
 }
 
+function createMesh() {
+	if(!heightmapData){
+		console.log("Missing heightmapData in createMesh()");
+		return null;
+	}
+
+    var width = heightmapData.width;
+    var height = heightmapData.height;
+    var data = heightmapData.data;
+
+    var totalVerts = (width - 1) * (height - 1) * 6;
+    var positions = new Float32Array(totalVerts * 3);
+	let pos = 0;
+
+	// Loop through each cell found in the heightmap
+	for (let j = 0; j < height - 1; j++) {
+        for (let i = 0; i < width - 1; i++) {
+			// Get z coordinates for curr and next rows
+        	var z0 =  (j / (height - 1)) - 0.5;
+        	var z1 = ((j + 1) / (height - 1)) - 0.5;
+
+            // Get x coordinates for curr and next columns
+            var x0 =  (i / (width - 1)) - 0.5;
+            var x1 = ((i + 1) / (width - 1)) - 0.5;
+
+            // Gets y values of all four corners of current cell
+            var y00 = data[(j * width) + i];
+            var y10 = data[(j * width) + (i + 1)];
+            var y01 = data[((j + 1) * width) + i];
+            var y11 = data[((j + 1) * width) + (i + 1)];
+
+            // Adds points for first triangle in cell
+            positions[pos++] = x0; positions[pos++] = y00; positions[pos++] = z0;
+            positions[pos++] = x1; positions[pos++] = y10; positions[pos++] = z0;
+            positions[pos++] = x0; positions[pos++] = y01; positions[pos++] = z1;
+
+            // Adds points for second triangle in cell
+            positions[pos++] = x1; positions[pos++] = y10; positions[pos++] = z0;
+            positions[pos++] = x1; positions[pos++] = y11; positions[pos++] = z1;
+            positions[pos++] = x0; positions[pos++] = y01; positions[pos++] = z1;
+        }
+    }
+
+	return positions;
+}
+
+function uploadMesh(positions){
+	if(!positions){
+		console.log("Missing positions in uploadMesh()");
+	}
+
+	const posBuffer = createBuffer(gl, gl.ARRAY_BUFFER, positions);
+    const posAttribLoc = gl.getAttribLocation(program, "position");
+    vao = createVAO(gl, posAttribLoc, posBuffer);
+
+    vertexCount = positions.length / 3;
+}
+
 
 window.loadImageFile = function(event)
 {
@@ -79,8 +137,12 @@ window.loadImageFile = function(event)
 					heightmapData.width: width of map (number of columns)
 					heightmapData.height: height of the map (number of rows)
 			*/
-			console.log('loaded image: ' + heightmapData.width + ' x ' + heightmapData.height);
 
+			// Creates triangle mesh then uploads to GPU
+			var positions = createMesh();
+			uploadMesh(positions);
+
+			console.log('loaded image: ' + heightmapData.width + ' x ' + heightmapData.height);
 		};
 		img.onerror = function() 
 		{
@@ -114,26 +176,65 @@ function draw()
 	var aspectRatio = +gl.canvas.width / +gl.canvas.height;
 	var nearClip = 0.001;
 	var farClip = 20.0;
+	var matrix; 
 
-	// perspective projection
-	var projectionMatrix = perspectiveMatrix(
-		fovRadians,
-		aspectRatio,
-		nearClip,
-		farClip,
-	);
+	if (document.querySelector("#projection").value == 'perspective'){
+		// perspective projection
+		matrix = perspectiveMatrix(
+			fovRadians,
+			aspectRatio,
+			nearClip,
+			farClip,
+		);
+	}else{
+		let left = -2.5 * aspectRatio;
+		let right = 2.5 * aspectRatio;
+		let bottom = -2.5;
+		let top = 2.5;
+
+		matrix = orthographicMatrix(left, right, bottom, top, nearClip, farClip);
+	}
 
 	// eye and target
 	var eye = [0, 5, 5];
 	var target = [0, 0, 0];
 
+	var viewMatrix = setupViewMatrix(eye, target);
 	var modelMatrix = identityMatrix();
 
 	// TODO: set up transformations to the model
 
+	// Read rotation, scale and height values from sliders
+	var yRotation = (parseFloat(document.querySelector("#yrotation").value) * Math.PI) / 180;
+	var zRotation = (parseFloat(document.querySelector("#zrotation").value) * Math.PI) / 180;
+	var scaleValue = (parseFloat(document.querySelector("#scale").value)) / 10.0;
+	var heightValue =(parseFloat(document.querySelector("#height").value)) / 15.0;
+
+	// Get new points based on rotation values
+	var yMatrix = rotateYMatrix(yRotation);
+	var zMatrix = rotateZMatrix(zRotation);
+	modelMatrix = multiplyMatrices(yMatrix, zMatrix);
+
+	// Scale terrain based on height slider
+	var heightMatrix = scaleMatrix(1, heightValue, 1);
+	modelMatrix = multiplyMatrices(modelMatrix, heightMatrix);
+
+	// Zoom in on object based on scale value
+	var scaleMatrixObj = scaleMatrix(scaleValue, scaleValue, scaleValue);
+	modelMatrix = multiplyMatrices(modelMatrix, scaleMatrixObj);
+
+	var modelviewMatrix = multiplyMatrices(viewMatrix, modelMatrix);
+
 	// setup viewing matrix
 	var eyeToTarget = subtract(target, eye);
 	var viewMatrix = setupViewMatrix(eye, target);
+
+	// Handles panning camera
+	var panX = parseFloat(document.querySelector("#panX").value);
+	var panY = parseFloat(document.querySelector("#panY").value);
+	var panZ = parseFloat(document.querySelector("#panZ").value);
+	var panMatrix = translateMatrix(panX, panY, panZ);
+	viewMatrix = multiplyMatrices(viewMatrix, panMatrix);
 
 	// model-view Matrix = view * model
 	var modelviewMatrix = multiplyMatrices(viewMatrix, modelMatrix);
@@ -153,7 +254,7 @@ function draw()
 	
 	// update modelview and projection matrices to GPU as uniforms
 	gl.uniformMatrix4fv(uniformModelViewLoc, false, new Float32Array(modelviewMatrix));
-	gl.uniformMatrix4fv(uniformProjectionLoc, false, new Float32Array(projectionMatrix));
+	gl.uniformMatrix4fv(uniformProjectionLoc, false, new Float32Array(matrix));
 
 	gl.bindVertexArray(vao);
 	
